@@ -20,6 +20,7 @@ validate_fstab() {
     echo "DEBUG: Contenu du fichier :"
     cat "$fstab_file"
 
+    declare -A mount_points
     local line_num=1
     local errors=()
 
@@ -61,10 +62,19 @@ validate_fstab() {
 
         # Valider le point de montage
         mount_point="${fields[1]}"
+        
         echo "DEBUG: Point de montage : '$mount_point'"
         if [[ ! "$mount_point" =~ ^/ ]] && [[ "$mount_point" != "none" ]]; then
             echo "DEBUG: Point de montage non absolu : '$mount_point'"
             errors+=("Line $line_num: Mount point must be absolute path: $mount_point")
+        fi
+        if [[ ! -d "$mount_point" ]] && [[ "$mount_point" != "none" ]]; then
+            errors+=("Line $line_num: Mount point does not exist: $mount_point")
+        fi
+        if [[ -n "${mount_points[$mount_point]+isset}" ]]; then
+            errors+=("Line $line_num: Duplicate mount point: $mount_point")
+        else
+            mount_points[$mount_point]=1
         fi
 
         # Valider le type de filesystem

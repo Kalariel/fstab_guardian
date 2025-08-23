@@ -78,3 +78,23 @@ teardown() {
 
     [ "$status" -eq 0 ]
 }
+
+@test "Complex fstab file should pass or fail appropriately" {
+    local test_file="$TEST_DIR/complex_fstab"
+    cat > "$test_file" <<EOF
+# Comment line
+UUID=12345678-1234-1234-1234-123456789abc / ext4 defaults 0 1
+UUID=12345678-1234-1234-1234-123456789def / ext4 defaults 0 1
+UUID=invalid-uuid /home ext4 defaults 0 2
+/dev/sda1 /boot ext4 defaults 0 2
+none /proc proc defaults 0 0
+EOF
+
+    run bash "$VALIDATOR" "$test_file"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Invalid UUID format"* ]]
+    [[ "$output" == *"Duplicate mount point"* ]]  # Si tu implémentes cette vérification
+    echo "Output was:"
+    echo "$output"
+}
