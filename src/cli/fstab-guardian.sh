@@ -111,14 +111,14 @@ validate_fstab_file() {
     
     echo -e "${YELLOW}🔍 Validating: $fstab_file${NC}"
     echo "----------------------------------------"
+    echo "" # Ligne vide
     
-    if bash "$VALIDATOR" "$fstab_file"; then
-        echo -e "${GREEN}✅ Validation passed! Your fstab looks good.${NC}"
-        return 0
-    else
-        echo -e "${RED}❌ Validation failed! Please fix the errors above.${NC}"
-        return 1
-    fi
+    # Le validator gère l'affichage - on laisse stdout/stderr passer directement
+    bash "$VALIDATOR" "$fstab_file"
+    local exit_code=$?
+    
+    echo "" # Ligne vide après
+    return $exit_code
 }
 
 backup_fstab() {
@@ -230,6 +230,7 @@ edit_fstab() {
     echo -e "\n🔍 Step 2: Validating current file..."
     if ! bash "$VALIDATOR" "$fstab_file" > /dev/null 2>&1; then
         echo -e "${YELLOW}⚠️  Current file has validation issues (proceeding anyway)${NC}"
+        echo -e "${YELLOW}   Run 'fstab-guardian validate' to see details${NC}"
     else
         echo -e "${GREEN}✅ Current file is valid${NC}"
     fi
@@ -253,7 +254,7 @@ edit_fstab() {
     # 5. Valider les modifications
     echo -e "\n🔍 Step 4: Validating your changes..."
     if bash "$VALIDATOR" "$temp_file"; then
-        echo -e "${GREEN}✅ Validation passed!${NC}"
+        echo -e "\n${GREEN}✅ Validation passed!${NC}"
         
         # 6. Appliquer les changements
         echo -e "\n💾 Step 5: Applying changes..."
@@ -458,11 +459,77 @@ EOF
     fi
 }
 
+# TODO Ajouter au case "restore" si --from <backup-file>
+restore_backup() {
+    local backup_file="$1"
+    local target="${2:-/etc/fstab}"
+    
+    if [[ ! -f "$backup_file" ]]; then
+        echo -e "${RED}❌ Backup file not found: $backup_file${NC}"
+        return 1
+    fi
+    
+    # Valider le backup avant restauration
+    if ! bash "$VALIDATOR" "$backup_file"; then
+        echo -e "${YELLOW}⚠️  Warning: Backup file has validation issues${NC}"
+        read -p "Continue anyway? (y/N): " -r
+        [[ ! $REPLY =~ ^[Yy]$ ]] && return 1
+    fi
+    
+    # Créer un backup du fichier actuel avant restauration
+    backup_fstab "$target"
+    
+    if sudo cp "$backup_file" "$target"; then
+        echo -e "${GREEN}✅ Restored from backup: $backup_file${NC}"
+        return 0
+    else
+        echo -e "${RED}❌ Failed to restore backup${NC}"
+        return 1
+    fi
+}
+
+# TODO Ajouter au case "validate" si --test
+test_mounts() {
+    local fstab_file="${1:-/etc/fstab}"
+    echo -e "${YELLOW}🧪 Testing mount operations...${NC}"
+    
+    # Test en mode dry-run d'abord
+    if sudo mount -a --fake -v; then
+        echo -e "${GREEN}✅ Dry-run test passed${NC}"
+        
+        read -p "Perform actual mount test? (y/N): " -r
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            sudo mount -a 2>&1 | while read -r line; do
+                echo "   $line"
+            done
+        fi
+    else
+        echo -e "${RED}❌ Dry-run test failed${NC}"
+        return 1
+    fi
+}
+
+# TODO Ajouter au case "compare"
+compare_fstab() {
+    local file1="${1:-/etc/fstab}"
+    local file2="$2"
+    
+    echo -e "${YELLOW}📊 Comparing fstab files${NC}"
+    echo "========================================="
+    echo "File 1: $file1"
+    echo "File 2: $file2"
+    echo ""
+    
+    if diff -u --color=always "$file1" "$file2" 2>/dev/null; then
+        echo -e "${GREEN}✅ Files are identical${NC}"
+    fi
+}
+
 load_config
 
 case "${1:-}" in
     "validate"|"check")
-        validate_fstab_file "$2"
+        validate_fstab_file "${2:-}"
         ;;
     "backup")
         backup_fstab "${2:-}"
