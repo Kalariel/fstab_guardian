@@ -37,6 +37,7 @@ fstab-guardian status
 - **Validation en temps réel** pendant l'édition
 - **Recovery interactif** en cas d'erreur
 - **Rotation des sauvegardes** (garde les 10 plus récentes par défaut)
+- **Recovery automatique au boot** si fstab corrompu
 
 ## Exemple de sortie
 
@@ -61,6 +62,29 @@ fstab-guardian validate
 
 # Configuration
 fstab-guardian config edit
+
+# Protection au boot (optionnel)
+sudo fstab-guardian install-boot-recovery
+```
+
+## Boot Recovery
+
+Protection automatique contre les fstab corrompus au boot :
+
+- **Détection automatique** des erreurs fstab au démarrage
+- **Restauration intelligente** depuis le backup le plus récent valide  
+- **Double protection** : hooks systemd + initramfs
+- **Logging complet** dans `/var/log/fstab-guardian.log`
+
+```bash
+# Installer la protection boot
+sudo fstab-guardian install-boot-recovery
+
+# Tester le système de recovery
+sudo fstab-guardian test-boot-recovery  
+
+# Voir les logs de recovery
+fstab-guardian boot-logs
 ```
 
 ## Tests

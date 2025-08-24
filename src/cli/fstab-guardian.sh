@@ -28,6 +28,9 @@ Commands:
     status              Show system status and recovery logs
     config show|edit    Show or edit configuration
     install             Install fstab-guardian system
+    install-boot-recovery   Install boot recovery hooks
+    test-boot-recovery      Simulate boot recovery process
+    boot-logs          Show boot recovery logs
     help                Show this help message
     
 Examples:
@@ -39,6 +42,8 @@ Examples:
     fstab-guardian restore --from fstab_20231201_123456  # Restore backup
     fstab-guardian compare /etc/fstab /tmp/test-fstab     # Compare files
     fstab-guardian config edit                 # Edit configuration
+    fstab-guardian install-boot-recovery       # Install boot recovery
+    fstab-guardian boot-logs                   # Show recovery logs
     
 EOF
 }
@@ -613,6 +618,22 @@ case "${1:-}" in
         ;;
     "install")
         install_system
+        ;;
+    "install-boot-recovery")
+        sudo "$SCRIPT_DIR/../boot/install-recovery-hooks.sh" install
+        ;;
+    "test-boot-recovery")
+        echo -e "${YELLOW}🧪 Testing boot recovery...${NC}"
+        sudo "$SCRIPT_DIR/../boot/fstab-recovery.sh"
+        ;;
+    "boot-logs")
+        if [[ -f "$RECOVERY_LOG" ]]; then
+            echo -e "${YELLOW}📄 Boot recovery logs:${NC}"
+            echo "=============================="
+            tail -20 "$RECOVERY_LOG"
+        else
+            echo -e "${YELLOW}⚠️  No recovery logs found at $RECOVERY_LOG${NC}"
+        fi
         ;;
     *)
         echo -e "${RED}❌ Unknown command: $1${NC}"
