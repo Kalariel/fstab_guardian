@@ -30,10 +30,12 @@ validate_fstab() {
         # Ignorer les commentaires et les lignes vides
         if [[ "$line" =~ ^[[:space:]]*# ]]; then
             echo "DEBUG: Ligne $line_num ignorée (commentaire)"
+            ((line_num++))
             continue
         fi
         if [[ -z "${line// }" ]]; then
             echo "DEBUG: Ligne $line_num ignorée (vide)"
+            ((line_num++))
             continue
         fi
 
@@ -45,6 +47,7 @@ validate_fstab() {
         if [[ ${#fields[@]} -ne 6 ]]; then
             echo "DEBUG: Ligne $line_num : Nombre de champs incorrect (${#fields[@]})"
             errors+=("Line $line_num: Expected 6 fields, got ${#fields[@]}")
+            ((line_num++))
             continue
         fi
 
