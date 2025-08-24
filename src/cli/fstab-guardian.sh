@@ -19,15 +19,24 @@ Usage: fstab-guardian <command> [options]
 
 Commands:
     validate [file]     Validate fstab syntax (default: /etc/fstab)
-    edit               Edit fstab with automatic validation
-    backup             Create backup of current fstab
-    status             Show system status and recovery logs
-    install-guard      Install boot recovery system
+    edit [file]         Edit fstab with automatic validation
+    backup [file]       Create backup of current fstab
+    list-backups        List available backups
+    restore --from <backup-file>  Restore from specific backup
+    compare <file1> <file2>       Compare two fstab files
+    status              Show system status and recovery logs
+    config show|edit    Show or edit configuration
+    install             Install fstab-guardian system
+    help                Show this help message
     
 Examples:
     fstab-guardian validate                    # Check /etc/fstab
     fstab-guardian validate /tmp/my-fstab      # Check specific file
     fstab-guardian backup                      # Backup current fstab
+    fstab-guardian list-backups                # Show available backups
+    fstab-guardian restore --from fstab_20231201_123456  # Restore backup
+    fstab-guardian compare /etc/fstab /tmp/test-fstab     # Compare files
+    fstab-guardian config edit                 # Edit configuration
     
 EOF
 }
@@ -559,6 +568,24 @@ case "${1:-}" in
         ;;
     "status")
         show_status
+        ;;
+    "restore")
+        if [[ "${2:-}" == "--from" ]] && [[ -n "${3:-}" ]]; then
+            restore_backup "$3"
+        else
+            echo -e "${RED}❌ Usage: fstab-guardian restore --from <backup-file>${NC}"
+            echo "Use 'fstab-guardian list-backups' to see available backups."
+            exit 1
+        fi
+        ;;
+    "compare")
+        if [[ -n "${2:-}" ]] && [[ -n "${3:-}" ]]; then
+            compare_fstab "$2" "$3"
+        else
+            echo -e "${RED}❌ Usage: fstab-guardian compare <file1> <file2>${NC}"
+            echo "Example: fstab-guardian compare /etc/fstab /tmp/test-fstab"
+            exit 1
+        fi
         ;;
     "install")
         install_system
