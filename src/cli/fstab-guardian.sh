@@ -18,7 +18,8 @@ show_help() {
 Usage: fstab-guardian <command> [options]
 
 Commands:
-    validate [file]     Validate fstab syntax (default: /etc/fstab)
+    validate [--test] [file]  Validate fstab syntax (default: /etc/fstab)
+                            --test: also test mount operations
     edit [file]         Edit fstab with automatic validation
     backup [file]       Create backup of current fstab
     list-backups        List available backups
@@ -31,6 +32,7 @@ Commands:
     
 Examples:
     fstab-guardian validate                    # Check /etc/fstab
+    fstab-guardian validate --test             # Check /etc/fstab and test mounts
     fstab-guardian validate /tmp/my-fstab      # Check specific file
     fstab-guardian backup                      # Backup current fstab
     fstab-guardian list-backups                # Show available backups
@@ -497,17 +499,26 @@ restore_backup() {
     fi
 }
 
-# TODO Ajouter au case "validate" si --test
 test_mounts() {
     local fstab_file="${1:-/etc/fstab}"
     echo -e "${YELLOW}🧪 Testing mount operations...${NC}"
     
+    # Avertissement si fichier différent de /etc/fstab
+    if [[ "$fstab_file" != "/etc/fstab" ]]; then
+        echo -e "${YELLOW}⚠️  Warning: mount -a always uses /etc/fstab, not $fstab_file${NC}"
+        echo -e "${YELLOW}   This test will check your current system fstab, not the specified file.${NC}"
+        read -p "Continue with mount test on /etc/fstab? (y/N): " -r
+        [[ ! $REPLY =~ ^[Yy]$ ]] && return 0
+        echo ""
+    fi
+    
     # Test en mode dry-run d'abord
-    if sudo mount -a --fake -v; then
+    if sudo mount -a --fake -v 2>/dev/null; then
         echo -e "${GREEN}✅ Dry-run test passed${NC}"
         
         read -p "Perform actual mount test? (y/N): " -r
         if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}Running mount -a...${NC}"
             sudo mount -a 2>&1 | while read -r line; do
                 echo "   $line"
             done
@@ -538,7 +549,20 @@ load_config
 
 case "${1:-}" in
     "validate"|"check")
-        validate_fstab_file "${2:-}"
+        if [[ "${2:-}" == "--test" ]]; then
+            # Validate puis test des mounts
+            fstab_file="${3:-/etc/fstab}"
+            if validate_fstab_file "$fstab_file"; then
+                echo "" # Ligne vide
+                test_mounts "$fstab_file"
+            else
+                echo -e "\n${RED}❌ Cannot test mounts: validation failed${NC}"
+                exit 1
+            fi
+        else
+            # Validation normale
+            validate_fstab_file "${2:-}"
+        fi
         ;;
     "backup")
         backup_fstab "${2:-}"
