@@ -6,7 +6,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RECOVERY_SCRIPT="$SCRIPT_DIR/fstab-recovery.sh"
 SYSTEMD_SERVICE="/etc/systemd/system/fstab-guardian-recovery.service"
-SYSTEMD_TARGET_WANTS="/etc/systemd/system/local-fs.target.wants"
 
 # Couleurs pour l'affichage
 RED='\033[0;31m'

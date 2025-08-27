@@ -1,10 +1,5 @@
 # TODO - Fonctionnalités futures
 
-## Gestion avancée des backups
-- [ ] `restore` interactif sans --from
-- [ ] `backup --comment "text"`  
-- [ ] `clean-backups --older-than 30d`
-
 ## Validation avancée  
 - [ ] `validate --strict` (warnings = erreurs)
 - [ ] `validate --ignore-warnings`
@@ -22,6 +17,9 @@
 - [ ] Support pour autres systèmes d'init (non-systemd)
 
 ## Déjà fait ✅
+- [x] `restore` interactif sans --from
+- [x] `backup --comment "text"`  
+- [x] `clean-backups --older-than 30d`
 - [x] `restore --from <file>`
 - [x] `validate --test`
 - [x] `compare <file1> <file2>`

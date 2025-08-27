@@ -32,7 +32,7 @@ find_valid_backup() {
     # Lister les backups par date (plus récent en premier)
     find "$BACKUP_DIR" -name "fstab_*" -type f -printf '%T@ %p\n' 2>/dev/null | \
     sort -rn | \
-    while read -r timestamp backup_file; do
+    while read -r _ backup_file; do
         # Tester si ce backup est valide
         if [[ -x "$validator" ]] && "$validator" validate "$backup_file" > /dev/null 2>&1; then
             echo "$backup_file"
@@ -51,7 +51,8 @@ restore_from_backup() {
     log_recovery "RECOVERY: Attempting restore from $backup_file"
     
     # Sauvegarder le fstab corrompu pour investigation
-    local corrupted_backup="/var/log/fstab-corrupted-$(date +%Y%m%d_%H%M%S)"
+    local corrupted_backup
+    corrupted_backup="/var/log/fstab-corrupted-$(date +%Y%m%d_%H%M%S)"
     cp "$FSTAB_FILE" "$corrupted_backup" 2>/dev/null || true
     log_recovery "RECOVERY: Corrupted fstab saved as $corrupted_backup"
     

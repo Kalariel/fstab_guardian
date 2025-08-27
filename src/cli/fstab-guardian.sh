@@ -22,8 +22,11 @@ Commands:
                             --test: also test mount operations
     edit [file]         Edit fstab with automatic validation
     backup [file]       Create backup of current fstab
+                        --comment "text": add comment to backup
     list-backups        List available backups
-    restore --from <backup-file>  Restore from specific backup
+    clean-backups --older-than <time>  Clean old backups (30d, 24h, 60m)
+    restore             Interactive restore (choose from backups)
+                        --from <backup-file>: restore specific backup
     compare <file1> <file2>       Compare two fstab files
     status              Show system status and recovery logs
     config show|edit    Show or edit configuration
@@ -38,7 +41,10 @@ Examples:
     fstab-guardian validate --test             # Check /etc/fstab and test mounts
     fstab-guardian validate /tmp/my-fstab      # Check specific file
     fstab-guardian backup                      # Backup current fstab
+    fstab-guardian backup --comment "Before kernel upgrade"  # Backup with comment
     fstab-guardian list-backups                # Show available backups
+    fstab-guardian clean-backups --older-than 30d  # Clean backups older than 30 days
+    fstab-guardian restore                     # Interactive restore
     fstab-guardian restore --from fstab_20231201_123456  # Restore backup
     fstab-guardian compare /etc/fstab /tmp/test-fstab     # Compare files
     fstab-guardian config edit                 # Edit configuration
@@ -139,7 +145,8 @@ validate_fstab_file() {
 
 backup_fstab() {
     local fstab_file="${1:-/etc/fstab}"
-    local backup_dir="/etc/fstab-backups"
+    local comment="${2:-}"
+    local backup_dir="${BACKUP_DIR:-/etc/fstab-backups}"
     local timestamp
     timestamp=$(date +"%Y%m%d_%H%M%S")
     local backup_file="$backup_dir/fstab_$timestamp"
@@ -166,12 +173,25 @@ backup_fstab() {
     if sudo cp "$fstab_file" "$backup_file"; then
         echo -e "${GREEN}✅ Backup created: $backup_file${NC}"
         
+        # Créer un fichier de métadonnées si commentaire fourni
+        if [[ -n "$comment" ]]; then
+            local meta_file="${backup_file}.meta"
+            cat > "$meta_file" << EOF
+# Backup metadata for $(basename "$backup_file")
+# Created: $(date '+%Y-%m-%d %H:%M:%S')
+# Original: $fstab_file
+# Comment: $comment
+EOF
+            sudo chown "$(stat -c '%U:%G' "$backup_file")" "$meta_file" 2>/dev/null || true
+        fi
+        
         # Afficher les infos du backup
         echo "📊 Backup info:"
         echo "  - Original: $fstab_file"
         echo "  - Backup: $backup_file" 
         echo "  - Size: $(du -h "$backup_file" | cut -f1)"
         echo "  - Lines: $(wc -l < "$backup_file")"
+        [[ -n "$comment" ]] && echo "  - Comment: $comment"
         
         # Garder seulement les 10 derniers backups
         cleanup_old_backups "$backup_dir"
@@ -206,7 +226,7 @@ cleanup_old_backups() {
 }
 
 list_backups() {
-    local backup_dir="/etc/fstab-backups"
+    local backup_dir="${BACKUP_DIR:-/etc/fstab-backups}"
     
     echo -e "${YELLOW}📋 Available backups:${NC}"
     echo "----------------------------------------"
@@ -219,7 +239,21 @@ list_backups() {
     
     # Lister les backups triés par date (plus récent en premier)
     find "$backup_dir" -name "fstab_*" -type f -printf '%TY-%Tm-%Td %TH:%TM  %s bytes  %p\n' 2>/dev/null | \
-    sort -r
+    sort -r | while IFS= read -r line; do
+        backup_file=$(echo "$line" | awk '{print $NF}')
+        meta_file="${backup_file}.meta"
+        
+        # Afficher la ligne de base
+        echo "$line"
+        
+        # Ajouter le commentaire s'il existe
+        if [[ -f "$meta_file" ]]; then
+            comment=$(grep "^# Comment:" "$meta_file" 2>/dev/null | sed 's/^# Comment: //')
+            if [[ -n "$comment" ]]; then
+                echo "                           💬 $comment"
+            fi
+        fi
+    done
 }
 
 edit_fstab() {
@@ -301,7 +335,7 @@ edit_fstab() {
 handle_validation_failure() {
     local original_file="$1"
     local temp_file="$2"
-    local backup_dir="/etc/fstab-backups"
+    local backup_dir="${BACKUP_DIR:-/etc/fstab-backups}"
     
     echo -e "\n${YELLOW}🤔 What would you like to do?${NC}"
     echo "1) Re-edit the file (fix the errors)"
@@ -475,7 +509,6 @@ EOF
     fi
 }
 
-# TODO Ajouter au case "restore" si --from <backup-file>
 restore_backup() {
     local backup_file="$1"
     local target="${2:-/etc/fstab}"
@@ -534,7 +567,82 @@ test_mounts() {
     fi
 }
 
-# TODO Ajouter au case "compare"
+restore_interactive() {
+    local backup_dir="${BACKUP_DIR:-/etc/fstab-backups}"
+    
+    echo -e "${YELLOW}🔄 Interactive restore${NC}"
+    echo "======================================="
+    
+    # Vérifier si des backups existent
+    if [[ ! -d "$backup_dir" ]] || ! find "$backup_dir" -name "fstab_*" -type f -print -quit 2>/dev/null | grep -q .; then
+        echo -e "${RED}❌ No backups found in $backup_dir${NC}"
+        echo "Create a backup first: fstab-guardian backup"
+        return 1
+    fi
+    
+    # Lister les backups disponibles avec numéros
+    echo "Available backups:"
+    echo "==================="
+    local i=1
+    local -a backups=()
+    local -a backup_names=()
+    
+    while IFS= read -r line; do
+        backup_file=$(echo "$line" | awk '{print $NF}')
+        backup_name=$(basename "$backup_file")
+        backups[i]=$backup_file
+        backup_names[i]=$backup_name
+        
+        # Afficher avec numéro
+        printf "%2d. %s\n" "$i" "$line"
+        
+        # Ajouter commentaire s'il existe
+        meta_file="${backup_file}.meta"
+        if [[ -f "$meta_file" ]]; then
+            comment=$(grep "^# Comment:" "$meta_file" 2>/dev/null | sed 's/^# Comment: //')
+            if [[ -n "$comment" ]]; then
+                printf "    💬 %s\n" "$comment"
+            fi
+        fi
+        
+        ((i++))
+    done < <(find "$backup_dir" -name "fstab_*" -type f -printf '%TY-%Tm-%Td %TH:%TM  %s bytes  %p\n' 2>/dev/null | sort -r)
+    
+    local total_backups=$((i-1))
+    
+    echo ""
+    echo -n "Select backup to restore [1-$total_backups, or 'q' to quit]: "
+    read -r choice
+    
+    # Vérifier l'input
+    if [[ "$choice" == "q" ]] || [[ "$choice" == "Q" ]]; then
+        echo "Restore cancelled."
+        return 0
+    fi
+    
+    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [[ "$choice" -lt 1 ]] || [[ "$choice" -gt "$total_backups" ]]; then
+        echo -e "${RED}❌ Invalid selection: $choice${NC}"
+        return 1
+    fi
+    
+    # Confirmer la restauration
+    selected_backup="${backups[$choice]}"
+    selected_name="${backup_names[$choice]}"
+    
+    echo ""
+    echo -e "${YELLOW}Selected backup: $selected_name${NC}"
+    echo -n "This will replace /etc/fstab. Continue? [y/N]: "
+    read -r confirm
+    
+    if [[ "$confirm" != "y" ]] && [[ "$confirm" != "Y" ]]; then
+        echo "Restore cancelled."
+        return 0
+    fi
+    
+    # Effectuer la restauration
+    restore_backup "$selected_backup"
+}
+
 compare_fstab() {
     local file1="${1:-/etc/fstab}"
     local file2="$2"
@@ -548,6 +656,113 @@ compare_fstab() {
     if diff -u --color=always "$file1" "$file2" 2>/dev/null; then
         echo -e "${GREEN}✅ Files are identical${NC}"
     fi
+}
+
+clean_old_backups() {
+    local time_spec="$1"
+    local backup_dir="${BACKUP_DIR:-/etc/fstab-backups}"
+    
+    echo -e "${YELLOW}🧹 Cleaning old backups${NC}"
+    echo "======================================="
+    
+    # Vérifier si le dossier existe
+    if [[ ! -d "$backup_dir" ]]; then
+        echo -e "${YELLOW}⚠️  Backup directory not found: $backup_dir${NC}"
+        return 0
+    fi
+    
+    # Convertir la spécification de temps en format find
+    local find_option=""
+    local find_time=""
+    if [[ "$time_spec" =~ ^([0-9]+)d$ ]]; then
+        local days="${BASH_REMATCH[1]}"
+        find_option="-mtime"
+        find_time="+$days"
+        echo "Looking for backups older than $days days..."
+    elif [[ "$time_spec" =~ ^([0-9]+)h$ ]]; then
+        local hours="${BASH_REMATCH[1]}"
+        find_option="-mmin"
+        find_time="+$(($hours * 60))"
+        echo "Looking for backups older than $hours hours..."
+    elif [[ "$time_spec" =~ ^([0-9]+)m$ ]]; then
+        local minutes="${BASH_REMATCH[1]}"
+        find_option="-mmin"
+        find_time="+$minutes"
+        echo "Looking for backups older than $minutes minutes..."
+    else
+        echo -e "${RED}❌ Invalid time format: $time_spec${NC}"
+        echo "Valid formats: 30d (days), 24h (hours), 60m (minutes)"
+        return 1
+    fi
+    
+    # Rechercher les fichiers anciens
+    local old_backups=()
+    local old_metas=()
+    
+    while IFS= read -r -d '' file; do
+        old_backups+=("$file")
+        # Ajouter le fichier meta associé s'il existe
+        if [[ -f "${file}.meta" ]]; then
+            old_metas+=("${file}.meta")
+        fi
+    done < <(find "$backup_dir" -name "fstab_*" -type f "$find_option" "$find_time" -print0 2>/dev/null)
+    
+    local total_files=$((${#old_backups[@]} + ${#old_metas[@]}))
+    
+    if [[ $total_files -eq 0 ]]; then
+        echo -e "${GREEN}✅ No old backups found${NC}"
+        return 0
+    fi
+    
+    # Afficher les fichiers qui seront supprimés
+    echo ""
+    echo "Files to be deleted:"
+    echo "==================="
+    for backup in "${old_backups[@]}"; do
+        local file_date=$(date -r "$backup" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "unknown")
+        echo "  📄 $(basename "$backup") ($file_date)"
+        
+        if [[ -f "${backup}.meta" ]]; then
+            echo "  📄 $(basename "${backup}.meta") (metadata)"
+        fi
+    done
+    
+    echo ""
+    echo -e "${YELLOW}⚠️  This will delete $total_files file(s)${NC}"
+    echo -n "Continue? [y/N]: "
+    read -r confirm
+    
+    if [[ "$confirm" != "y" ]] && [[ "$confirm" != "Y" ]]; then
+        echo "Cleanup cancelled."
+        return 0
+    fi
+    
+    # Supprimer les fichiers
+    local deleted=0
+    for backup in "${old_backups[@]}"; do
+        if rm -f "$backup"; then
+            echo "🗑️  Deleted: $(basename "$backup")"
+            ((deleted++))
+        else
+            echo -e "${RED}❌ Failed to delete: $(basename "$backup")${NC}"
+        fi
+    done
+    
+    for meta in "${old_metas[@]}"; do
+        if rm -f "$meta"; then
+            echo "🗑️  Deleted: $(basename "$meta")"
+            ((deleted++))
+        else
+            echo -e "${RED}❌ Failed to delete: $(basename "$meta")${NC}"
+        fi
+    done
+    
+    echo ""
+    echo -e "${GREEN}✅ Cleanup complete: $deleted/$total_files files deleted${NC}"
+    
+    # Afficher le statut final
+    local remaining=$(find "$backup_dir" -name "fstab_*" -type f 2>/dev/null | wc -l)
+    echo "📊 Remaining backups: $remaining"
 }
 
 load_config
@@ -570,10 +785,24 @@ case "${1:-}" in
         fi
         ;;
     "backup")
-        backup_fstab "${2:-}"
+        if [[ "${2:-}" == "--comment" ]] && [[ -n "${3:-}" ]]; then
+            backup_fstab "${4:-}" "$3"
+        else
+            backup_fstab "${2:-}"
+        fi
         ;;
     "list-backups"|"backups")
         list_backups
+        ;;
+    "clean-backups")
+        if [[ "${2:-}" == "--older-than" ]] && [[ -n "${3:-}" ]]; then
+            clean_old_backups "$3"
+        else
+            echo -e "${RED}❌ Usage: fstab-guardian clean-backups --older-than <time>${NC}"
+            echo "Time format: 30d (days), 24h (hours), 60m (minutes)"
+            echo "Example: fstab-guardian clean-backups --older-than 30d"
+            exit 1
+        fi
         ;;
     "edit")
         edit_fstab "${2:-}"
@@ -602,9 +831,7 @@ case "${1:-}" in
         if [[ "${2:-}" == "--from" ]] && [[ -n "${3:-}" ]]; then
             restore_backup "$3"
         else
-            echo -e "${RED}❌ Usage: fstab-guardian restore --from <backup-file>${NC}"
-            echo "Use 'fstab-guardian list-backups' to see available backups."
-            exit 1
+            restore_interactive
         fi
         ;;
     "compare")
