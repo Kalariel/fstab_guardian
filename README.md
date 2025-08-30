@@ -9,7 +9,16 @@ Never brick your system again with a malformed fstab!
 - **Édition sécurisée** avec validation automatique et backup
 - **Gestion complète des sauvegardes** avec rotation automatique
 
-## Fonctionnalités principales
+## Architecture
+
+### 🏗️ Architecture modulaire
+- **CLI principal** : `src/cli/fstab-guardian.sh` - orchestrateur principal (130 lignes)
+- **Modules séparés** dans `src/cli/modules/` :
+  - `validation.sh` - Validation fstab et tests de montage
+  - `backup.sh` - Gestion complète des sauvegardes
+  - `admin.sh` - Administration, configuration, installation
+  - `editor.sh` - Édition sécurisée avec validation temps-réel
+  - `recovery.sh` - Interface boot recovery et hooks système
 
 ### ✅ Validation intelligente
 - **Erreurs critiques** : Problèmes qui empêchent le boot (UUID malformés, points de montage dupliqués, flags invalides)

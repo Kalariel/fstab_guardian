@@ -26,3 +26,4 @@
 - [x] `install-boot-recovery` - Hooks systemd/initramfs
 - [x] `test-boot-recovery` - Simulation recovery
 - [x] `boot-logs` - Logs de recovery
+- [x] **Refactorisation modulaire complète** - Séparation en 5 modules distincts (validation, backup, admin, editor, recovery)
