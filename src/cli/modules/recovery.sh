@@ -28,10 +28,10 @@ install_boot_recovery() {
     fi
     
     # Déléguer à l'installateur dédié
-    if [[ -x "$SCRIPT_DIR/../boot/install-recovery-hooks.sh" ]]; then
-        "$SCRIPT_DIR/../boot/install-recovery-hooks.sh" install
+    if [[ -x "$BOOT_DIR/install-recovery-hooks.sh" ]]; then
+        "$BOOT_DIR/install-recovery-hooks.sh" install
     else
-        echo -e "${RED}❌ Recovery installer not found: $SCRIPT_DIR/../boot/install-recovery-hooks.sh${NC}"
+        echo -e "${RED}❌ Recovery installer not found: $BOOT_DIR/install-recovery-hooks.sh${NC}"
         return 1
     fi
 }
@@ -48,10 +48,10 @@ test_boot_recovery() {
     fi
     
     # Déléguer au testeur dédié
-    if [[ -x "$SCRIPT_DIR/../boot/fstab-recovery.sh" ]]; then
-        "$SCRIPT_DIR/../boot/fstab-recovery.sh"
+    if [[ -x "$BOOT_DIR/fstab-recovery.sh" ]]; then
+        "$BOOT_DIR/fstab-recovery.sh"
     else
-        echo -e "${RED}❌ Recovery script not found: $SCRIPT_DIR/../boot/fstab-recovery.sh${NC}"
+        echo -e "${RED}❌ Recovery script not found: $BOOT_DIR/fstab-recovery.sh${NC}"
         return 1
     fi
 }
@@ -143,10 +143,10 @@ uninstall_boot_recovery() {
     fi
     
     # Déléguer à l'installateur avec option uninstall
-    if [[ -x "$SCRIPT_DIR/../boot/install-recovery-hooks.sh" ]]; then
-        "$SCRIPT_DIR/../boot/install-recovery-hooks.sh" uninstall
+    if [[ -x "$BOOT_DIR/install-recovery-hooks.sh" ]]; then
+        "$BOOT_DIR/install-recovery-hooks.sh" uninstall
     else
-        echo -e "${RED}❌ Recovery installer not found: $SCRIPT_DIR/../boot/install-recovery-hooks.sh${NC}"
+        echo -e "${RED}❌ Recovery installer not found: $BOOT_DIR/install-recovery-hooks.sh${NC}"
         return 1
     fi
 }
@@ -181,7 +181,7 @@ show_recovery_status() {
         fi
         
         # Script de recovery
-        if [[ -x "$SCRIPT_DIR/../boot/fstab-recovery.sh" ]]; then
+        if [[ -x "$BOOT_DIR/fstab-recovery.sh" ]]; then
             echo -e "   ${GREEN}✅ Recovery script: available${NC}"
         else
             echo -e "   ${RED}❌ Recovery script: missing${NC}"

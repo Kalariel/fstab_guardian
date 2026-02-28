@@ -2,6 +2,32 @@
 
 Toutes les modifications notables de ce projet seront documentées dans ce fichier.
 
+## [Non publié] - 2026-02-27
+
+### ✨ Nouvelles fonctionnalités
+- **Commande `add`** : Ajout interactif de disques/partitions au fstab
+  - Scan automatique des périphériques bloc via `lsblk`
+  - Filtre les devices déjà présents dans fstab
+  - Tableau numéroté avec device, UUID, type, taille, label et état de montage
+  - Saisie d'un nom convivial ajouté en commentaire dans fstab
+  - Point de montage suggéré automatiquement d'après le nom
+  - Options de montage adaptées au filesystem (NTFS, FAT, exFAT, ext4…)
+  - Création automatique du répertoire de montage
+  - Gestion séparée des partitions swap
+  - Option `--list` pour lister sans modifier
+- **Commande `show`** (alias `cat`) : Affichage coloré du fstab
+  - En-tête avec chemin, nombre de lignes, taille et date de modification
+  - Commentaires en jaune, devices en cyan/gras, fstypes en vert, options grisées
+  - Numéros de ligne
+- **Script `install.sh`** à la racine du projet
+  - Permet d'installer depuis la racine sans naviguer dans `src/cli/`
+  - Usage : `sudo bash install.sh`
+
+### 🔧 Technique
+- Nouveau module `src/cli/modules/disk_add.sh`
+- Parsing `lsblk -P` sans `eval` (extraction par grep/cut)
+- Correction bug `set -e` sur `((line_num++))` → remplacé par `$((line_num + 1))`
+
 ## [Non publié] - 2025-08-30
 
 ### 🏗️ Changements majeurs

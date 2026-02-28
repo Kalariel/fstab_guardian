@@ -8,9 +8,20 @@ set -euo pipefail
 # INITIALIZATION
 # =============================================================================
 
-# Chemins et configuration de base
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VALIDATOR="$SCRIPT_DIR/../validators/fstab_validator.sh"
+
+# Détection mode installé (/usr/local/bin) vs développement (repo)
+if [[ "$SCRIPT_DIR" == "/usr/local/bin" ]] && [[ -d "/usr/local/lib/fstab-guardian" ]]; then
+    LIB_DIR="/usr/local/lib/fstab-guardian"
+    MODULES_DIR="$LIB_DIR/modules"
+    VALIDATOR="$LIB_DIR/validators/fstab_validator.sh"
+    BOOT_DIR="$LIB_DIR/boot"
+else
+    # Mode développement : exécution depuis le repo
+    MODULES_DIR="$SCRIPT_DIR/modules"
+    VALIDATOR="$SCRIPT_DIR/../validators/fstab_validator.sh"
+    BOOT_DIR="$SCRIPT_DIR/../boot"
+fi
 
 # Couleurs pour l'affichage
 RED='\033[0;31m'
@@ -23,7 +34,7 @@ NC='\033[0m' # No Color
 # =============================================================================
 
 # Charger tous les modules
-for module in "$SCRIPT_DIR/modules"/*.sh; do
+for module in "$MODULES_DIR"/*.sh; do
     if [[ -f "$module" ]]; then
         source "$module"
     fi
@@ -89,6 +100,20 @@ case "${1:-}" in
         fi
         ;;
         
+    # === SHOW ===
+    "show"|"cat")
+        show_fstab "${2:-}"
+        ;;
+
+    # === DISK ADDITION ===
+    "add")
+        if [[ "${2:-}" == "--list" ]]; then
+            list_available_disks "${3:-}"
+        else
+            add_disk_interactive "${2:-}"
+        fi
+        ;;
+
     # === EDITING ===
     "edit")
         edit_fstab "${2:-}"
@@ -127,6 +152,10 @@ case "${1:-}" in
         
     "install")
         install_system
+        ;;
+
+    "uninstall")
+        uninstall_system
         ;;
         
     # === BOOT RECOVERY ===

@@ -11,6 +11,9 @@ Usage: fstab-guardian <command> [options]
 Commands:
     validate [--test] [file]  Validate fstab syntax (default: /etc/fstab)
                             --test: also test mount operations
+    show [file]         Display fstab with syntax highlighting (default: /etc/fstab)
+    add [file]          Interactively add a disk/partition to fstab
+                        --list: only list available disks (no modification)
     edit [file]         Edit fstab with automatic validation
     backup [file]       Create backup of current fstab
                         --comment "text": add comment to backup
@@ -22,6 +25,7 @@ Commands:
     status              Show system status and recovery logs
     config show|edit    Show or edit configuration
     install             Install fstab-guardian system
+    uninstall           Uninstall fstab-guardian (keeps backups and config)
     install-boot-recovery   Install boot recovery hooks
     test-boot-recovery      Simulate boot recovery process
     boot-logs          Show boot recovery logs
@@ -31,6 +35,10 @@ Examples:
     fstab-guardian validate                    # Check /etc/fstab
     fstab-guardian validate --test             # Check /etc/fstab and test mounts
     fstab-guardian validate /tmp/my-fstab      # Check specific file
+    fstab-guardian show                        # Display /etc/fstab
+    fstab-guardian show /tmp/my-fstab          # Display specific file
+    fstab-guardian add                         # Add a disk interactively
+    fstab-guardian add --list                  # List available disks
     fstab-guardian backup                      # Backup current fstab
     fstab-guardian backup --comment "Before kernel upgrade"  # Backup with comment
     fstab-guardian list-backups                # Show available backups
@@ -164,37 +172,91 @@ show_status() {
 install_system() {
     echo -e "${YELLOW}📦 Installing fstab-guardian system${NC}"
     echo "============================================="
-    
+
     # Vérifier les permissions root
     if [[ $EUID -ne 0 ]]; then
         echo -e "${RED}❌ Installation requires root privileges${NC}"
         echo "Please run: sudo fstab-guardian install"
         return 1
     fi
-    
-    # 1. Créer les dossiers nécessaires
+
+    local dest_bin="/usr/local/bin/fstab-guardian"
+    local dest_lib="/usr/local/lib/fstab-guardian"
+
+    # Répertoire source (src/) depuis SCRIPT_DIR (src/cli/)
+    local src_dir
+    src_dir="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+    # 1. Créer l'arborescence des dossiers
     echo "📁 Creating directories..."
-    sudo mkdir -p "$BACKUP_DIR"
-    sudo mkdir -p "$(dirname "$RECOVERY_LOG")"
-    
-    # 2. Créer la config par défaut
+    mkdir -p "$dest_lib/modules"
+    mkdir -p "$dest_lib/validators"
+    mkdir -p "$dest_lib/boot"
+    mkdir -p "$BACKUP_DIR"
+    mkdir -p "$(dirname "$RECOVERY_LOG")"
+
+    # 2. Installer le script principal
+    echo "📄 Installing main script → $dest_bin"
+    cp "$SCRIPT_DIR/fstab-guardian.sh" "$dest_bin"
+    chmod 755 "$dest_bin"
+
+    # 3. Installer les modules
+    echo "📦 Installing modules → $dest_lib/modules/"
+    cp "$SCRIPT_DIR/modules/"*.sh "$dest_lib/modules/"
+    chmod 644 "$dest_lib/modules/"*.sh
+
+    # 4. Installer le validator
+    echo "🔍 Installing validator → $dest_lib/validators/"
+    cp "$src_dir/validators/"*.sh "$dest_lib/validators/"
+    chmod 755 "$dest_lib/validators/"*.sh
+
+    # 5. Installer les scripts de boot recovery
+    echo "🛡️  Installing boot scripts → $dest_lib/boot/"
+    cp "$src_dir/boot/"*.sh "$dest_lib/boot/"
+    chmod 755 "$dest_lib/boot/"*.sh
+
+    # 6. Créer la config par défaut
     create_default_config
-    
-    # 3. Copier le script principal vers /usr/local/bin
-    echo "📄 Installing script..."
-    sudo cp "$SCRIPT_DIR/fstab-guardian.sh" /usr/local/bin/fstab-guardian
-    sudo chmod +x /usr/local/bin/fstab-guardian
-    
-    # 4. Créer un backup initial
+
+    # 7. Backup initial du fstab
     echo "💾 Creating initial backup..."
     backup_fstab
-    
+
+    echo ""
     echo -e "${GREEN}✅ Installation complete!${NC}"
     echo ""
+    echo "   Binary  : $dest_bin"
+    echo "   Lib dir : $dest_lib"
+    echo "   Config  : /etc/fstab-guardian.conf"
+    echo "   Backups : $BACKUP_DIR"
+    echo ""
     echo "Next steps:"
-    echo "• Test: fstab-guardian validate"
-    echo "• Enable boot protection: sudo fstab-guardian install-boot-recovery"
-    echo "• Show status: fstab-guardian status"
+    echo "  • fstab-guardian validate"
+    echo "  • sudo fstab-guardian install-boot-recovery"
+    echo "  • fstab-guardian status"
+}
+
+uninstall_system() {
+    echo -e "${YELLOW}🗑️  Uninstalling fstab-guardian system${NC}"
+    echo "============================================="
+
+    if [[ $EUID -ne 0 ]]; then
+        echo -e "${RED}❌ Uninstallation requires root privileges${NC}"
+        echo "Please run: sudo fstab-guardian uninstall"
+        return 1
+    fi
+
+    echo -n "This will remove the binary and lib files (backups are kept). Continue? [y/N]: "
+    read -r confirm
+    [[ "$confirm" != "y" ]] && [[ "$confirm" != "Y" ]] && { echo "Cancelled."; return 0; }
+
+    rm -f /usr/local/bin/fstab-guardian
+    rm -rf /usr/local/lib/fstab-guardian
+
+    echo -e "${GREEN}✅ fstab-guardian uninstalled.${NC}"
+    echo "   Backups kept in: $BACKUP_DIR"
+    echo "   Config kept at:  /etc/fstab-guardian.conf"
+    echo "   Remove manually if desired."
 }
 
 create_default_config() {

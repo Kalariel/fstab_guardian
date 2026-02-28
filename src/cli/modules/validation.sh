@@ -194,6 +194,42 @@ test_mounts() {
     fi
 }
 
+show_fstab() {
+    local fstab_file="${1:-/etc/fstab}"
+    local CYAN='\033[0;36m'
+    local BOLD='\033[1m'
+    local DIM='\033[2m'
+
+    if [[ ! -f "$fstab_file" ]]; then
+        echo -e "${RED}❌ Fichier introuvable: $fstab_file${NC}"
+        return 1
+    fi
+
+    echo -e "${YELLOW}📄 $fstab_file${NC}  $(wc -l < "$fstab_file") lignes · $(stat -c%s "$fstab_file") octets · modifié le $(date -r "$fstab_file" '+%Y-%m-%d %H:%M')"
+    echo "$(printf '%.s─' {1..70})"
+
+    local line_num=0
+    while IFS= read -r line; do
+        line_num=$((line_num + 1))
+        printf "${DIM}%3d${NC}  " "$line_num"
+
+        if [[ "$line" =~ ^[[:space:]]*# ]]; then
+            # Commentaire
+            echo -e "${YELLOW}$line${NC}"
+        elif [[ -z "${line// }" ]]; then
+            # Ligne vide
+            echo ""
+        else
+            # Entrée fstab : coloriser les champs
+            local device mountpoint fstype options dump pass rest
+            read -r device mountpoint fstype options dump pass rest <<< "$line"
+            echo -e "${BOLD}${CYAN}${device}${NC}  ${mountpoint}  ${GREEN}${fstype}${NC}  ${DIM}${options} ${dump} ${pass}${NC}"
+        fi
+    done < "$fstab_file"
+
+    echo "$(printf '%.s─' {1..70})"
+}
+
 compare_fstab() {
     local file1="${1:-/etc/fstab}"
     local file2="$2"
